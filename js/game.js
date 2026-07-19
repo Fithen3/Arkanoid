@@ -8,10 +8,13 @@ import {
   PADDLE,
   BALL,
   MAX_BOUNCE_ANGLE,
+  BRICK,
 } from './constants.js';
 import { InputManager } from './input.js';
 import { Paddle } from './entities/paddle.js';
 import { Ball } from './entities/ball.js';
+import { BrickField } from './entities/brick.js';
+import { LEVELS } from './levels.js';
 import { clamp } from './utils.js';
 
 export class ArkanoidGame {
@@ -31,6 +34,9 @@ export class ArkanoidGame {
     );
 
     this.balls = [];
+    this.score = 0;
+    this.level = 0;
+    this.brickField = this.buildBrickField(this.level);
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -61,6 +67,10 @@ export class ArkanoidGame {
   snapBallToPaddle(ball) {
     ball.x = this.paddle.centerX;
     ball.y = this.paddle.y - ball.radius;
+  }
+
+  buildBrickField(levelIndex) {
+    return new BrickField(LEVELS[levelIndex], PLAYFIELD.left, BRICK.top, BRICK.width, BRICK.height);
   }
 
   start() {
@@ -130,6 +140,7 @@ export class ArkanoidGame {
       ball.update(dt);
       this.resolveBallWallCollision(ball);
       this.resolveBallPaddleCollision(ball);
+      this.resolveBallBrickCollision(ball);
     }
 
     this.balls = this.balls.filter((ball) => ball.y - ball.radius <= PLAYFIELD.bottom);
@@ -174,6 +185,38 @@ export class ArkanoidGame {
     ball.y = rect.y - ball.radius;
   }
 
+  resolveBallBrickCollision(ball) {
+    for (const brick of this.brickField.getAliveBricks()) {
+      const rect = brick.getRect();
+      const closestX = clamp(ball.x, rect.x, rect.x + rect.width);
+      const closestY = clamp(ball.y, rect.y, rect.y + rect.height);
+      const dx = ball.x - closestX;
+      const dy = ball.y - closestY;
+      if (dx * dx + dy * dy > ball.radius * ball.radius) continue;
+
+      if (closestX === ball.x) {
+        // Hit the top or bottom face.
+        ball.vy = -ball.vy;
+        ball.y = ball.y < rect.y + rect.height / 2 ? rect.y - ball.radius : rect.y + rect.height + ball.radius;
+      } else if (closestY === ball.y) {
+        // Hit the left or right face.
+        ball.vx = -ball.vx;
+        ball.x = ball.x < rect.x + rect.width / 2 ? rect.x - ball.radius : rect.x + rect.width + ball.radius;
+      } else {
+        // Corner hit.
+        ball.vx = -ball.vx;
+        ball.vy = -ball.vy;
+      }
+
+      const result = brick.hit();
+      if (result.destroyed) {
+        this.score += result.scoreValue;
+        this.brickField.registerDestroyed();
+      }
+      break; // resolve at most one brick per ball per frame
+    }
+  }
+
   render() {
     const { ctx } = this;
     ctx.fillStyle = '#000000';
@@ -186,11 +229,23 @@ export class ArkanoidGame {
       case GAME_STATE.SERVE:
       case GAME_STATE.PLAYING:
         this.renderPlayfield();
+        this.renderBricks();
         this.renderPaddle();
         this.renderBalls();
         break;
       default:
         break;
+    }
+  }
+
+  renderBricks() {
+    const { ctx } = this;
+    for (const brick of this.brickField.getAliveBricks()) {
+      ctx.fillStyle = brick.color;
+      ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(brick.x + 0.5, brick.y + 0.5, brick.width - 1, brick.height - 1);
     }
   }
 

@@ -43,3 +43,22 @@ export const BALL = {
 
 // Max angle (degrees, from vertical) the paddle can redirect the ball.
 export const MAX_BOUNCE_ANGLE = 60;
+
+export const BRICK = {
+  width: 16,
+  height: 8,
+  cols: 15,
+  top: PLAYFIELD.top + 8,
+};
+
+// Type code -> visual/behavioral definition. 0 means "empty" in level data.
+export const BRICK_TYPES = {
+  1: { color: '#fc6060', hp: 1, indestructible: false, score: 50 }, // red
+  2: { color: '#fca050', hp: 1, indestructible: false, score: 60 }, // orange
+  3: { color: '#fcec50', hp: 1, indestructible: false, score: 70 }, // yellow
+  4: { color: '#60d860', hp: 1, indestructible: false, score: 80 }, // green
+  5: { color: '#60c4fc', hp: 1, indestructible: false, score: 90 }, // cyan
+  6: { color: '#d070f0', hp: 1, indestructible: false, score: 100 }, // magenta
+  7: { color: '#c8c8d0', hp: 2, indestructible: false, score: 150 }, // silver
+  8: { color: '#e8c040', hp: Infinity, indestructible: true, score: 0 }, // gold
+};
