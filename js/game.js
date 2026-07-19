@@ -1,4 +1,6 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, GAME_STATE, FIXED_DT, MAX_FRAME_DELTA } from './constants.js';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, GAME_STATE, FIXED_DT, MAX_FRAME_DELTA, PLAYFIELD, PADDLE } from './constants.js';
+import { InputManager } from './input.js';
+import { Paddle } from './entities/paddle.js';
 
 export class ArkanoidGame {
   constructor(canvasEl) {
@@ -6,6 +8,15 @@ export class ArkanoidGame {
     this.canvas.width = CANVAS_WIDTH;
     this.canvas.height = CANVAS_HEIGHT;
     this.ctx = this.canvas.getContext('2d');
+
+    this.input = new InputManager();
+    this.paddle = new Paddle(
+      (PLAYFIELD.left + PLAYFIELD.right) / 2 - PADDLE.width / 2,
+      PADDLE.y,
+      PADDLE.width,
+      PADDLE.height,
+      PADDLE.speed
+    );
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -54,13 +65,22 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.updateTitle(dt);
         break;
+      case GAME_STATE.PLAYING:
+        this.updatePlaying(dt);
+        break;
       default:
         break;
     }
   }
 
   updateTitle(_dt) {
-    // Placeholder: title screen is static for now, no input handling yet.
+    if (this.input.consumePress('Space')) {
+      this.setState(GAME_STATE.PLAYING);
+    }
+  }
+
+  updatePlaying(dt) {
+    this.paddle.update(dt, this.input, PLAYFIELD.left, PLAYFIELD.right);
   }
 
   render() {
@@ -72,9 +92,32 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.renderTitle();
         break;
+      case GAME_STATE.PLAYING:
+        this.renderPlayfield();
+        this.renderPaddle();
+        break;
       default:
         break;
     }
+  }
+
+  renderPlayfield() {
+    const { ctx } = this;
+    ctx.strokeStyle = '#3050c0';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      PLAYFIELD.left,
+      PLAYFIELD.top,
+      PLAYFIELD.right - PLAYFIELD.left,
+      PLAYFIELD.bottom - PLAYFIELD.top
+    );
+  }
+
+  renderPaddle() {
+    const { ctx } = this;
+    const rect = this.paddle.getRect();
+    ctx.fillStyle = '#e0e0e0';
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
   }
 
   renderTitle() {
