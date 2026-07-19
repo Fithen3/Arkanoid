@@ -43,6 +43,8 @@ export const BALL = {
 
 export const STARTING_LIVES = 3;
 export const BALL_LOST_PAUSE = 1.0; // seconds shown before the next serve
+export const ROUND_INTRO_DURATION = 1.5;
+export const ROUND_CLEAR_DURATION = 1.5;
 
 // Max angle (degrees, from vertical) the paddle can redirect the ball.
 export const MAX_BOUNCE_ANGLE = 60;

@@ -11,6 +11,8 @@ import {
   BRICK,
   STARTING_LIVES,
   BALL_LOST_PAUSE,
+  ROUND_INTRO_DURATION,
+  ROUND_CLEAR_DURATION,
 } from './constants.js';
 import { InputManager } from './input.js';
 import { Paddle } from './entities/paddle.js';
@@ -118,8 +120,17 @@ export class ArkanoidGame {
       case GAME_STATE.BALL_LOST:
         this.updateBallLost(dt);
         break;
+      case GAME_STATE.ROUND_INTRO:
+        this.updateRoundIntro(dt);
+        break;
+      case GAME_STATE.ROUND_CLEAR:
+        this.updateRoundClear(dt);
+        break;
       case GAME_STATE.GAME_OVER:
         this.updateGameOver(dt);
+        break;
+      case GAME_STATE.VICTORY:
+        this.updateVictory(dt);
         break;
       default:
         break;
@@ -128,7 +139,27 @@ export class ArkanoidGame {
 
   updateTitle(_dt) {
     if (this.input.consumePress('Space')) {
+      this.resetGame();
+      this.startRound(0);
+    }
+  }
+
+  updateRoundIntro(_dt) {
+    if (this.stateTime >= ROUND_INTRO_DURATION) {
       this.setState(GAME_STATE.SERVE);
+    }
+  }
+
+  updateRoundClear(_dt) {
+    if (this.stateTime >= ROUND_CLEAR_DURATION) {
+      this.startRound(this.level + 1);
+    }
+  }
+
+  updateVictory(_dt) {
+    if (this.stateTime > 1.0 && this.input.consumePress('Space')) {
+      this.resetGame();
+      this.setState(GAME_STATE.TITLE);
     }
   }
 
@@ -153,10 +184,24 @@ export class ArkanoidGame {
       this.resolveBallBrickCollision(ball);
     }
 
+    if (this.brickField.allCleared()) {
+      this.handleRoundClear();
+      return;
+    }
+
     this.balls = this.balls.filter((ball) => ball.y - ball.radius <= PLAYFIELD.bottom);
 
     if (this.balls.length === 0) {
       this.handleBallLost();
+    }
+  }
+
+  handleRoundClear() {
+    this.balls = [];
+    if (this.level + 1 >= LEVELS.length) {
+      this.setState(GAME_STATE.VICTORY);
+    } else {
+      this.setState(GAME_STATE.ROUND_CLEAR);
     }
   }
 
@@ -184,10 +229,16 @@ export class ArkanoidGame {
 
   resetGame() {
     this.score = 0;
-    this.level = 0;
     this.lives = STARTING_LIVES;
-    this.brickField = this.buildBrickField(this.level);
     this.balls = [];
+  }
+
+  startRound(levelIndex) {
+    this.level = levelIndex;
+    this.brickField = this.buildBrickField(this.level);
+    this.paddle.width = this.paddle.baseWidth;
+    this.paddle.x = (PLAYFIELD.left + PLAYFIELD.right) / 2 - this.paddle.width / 2;
+    this.setState(GAME_STATE.ROUND_INTRO);
   }
 
   resolveBallWallCollision(ball) {
@@ -269,6 +320,8 @@ export class ArkanoidGame {
       case GAME_STATE.SERVE:
       case GAME_STATE.PLAYING:
       case GAME_STATE.BALL_LOST:
+      case GAME_STATE.ROUND_INTRO:
+      case GAME_STATE.ROUND_CLEAR:
         this.renderPlayfield();
         this.renderBricks();
         this.renderPaddle();
@@ -280,10 +333,22 @@ export class ArkanoidGame {
           canvasWidth: CANVAS_WIDTH,
           canvasHeight: CANVAS_HEIGHT,
         });
+        if (this.state === GAME_STATE.ROUND_INTRO) {
+          renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [`ROUND ${this.level + 1}`]);
+        } else if (this.state === GAME_STATE.ROUND_CLEAR) {
+          renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, ['ROUND CLEAR']);
+        }
         break;
       case GAME_STATE.GAME_OVER:
         renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [
           'GAME OVER',
+          `SCORE ${this.score}`,
+          'PUSH SPACE KEY',
+        ]);
+        break;
+      case GAME_STATE.VICTORY:
+        renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [
+          'CONGRATULATIONS',
           `SCORE ${this.score}`,
           'PUSH SPACE KEY',
         ]);
