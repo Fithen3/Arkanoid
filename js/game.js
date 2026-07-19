@@ -111,6 +111,9 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.updateTitle(dt);
         break;
+      case GAME_STATE.INSTRUCTIONS:
+        this.updateInstructions(dt);
+        break;
       case GAME_STATE.SERVE:
         this.updateServe(dt);
         break;
@@ -139,8 +142,16 @@ export class ArkanoidGame {
 
   updateTitle(_dt) {
     if (this.input.consumePress('Space')) {
+      this.setState(GAME_STATE.INSTRUCTIONS);
+    }
+  }
+
+  updateInstructions(_dt) {
+    if (this.input.consumePress('Space')) {
       this.resetGame();
       this.startRound(0);
+    } else if (this.input.consumePress('Escape')) {
+      this.setState(GAME_STATE.TITLE);
     }
   }
 
@@ -317,6 +328,9 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.renderTitle();
         break;
+      case GAME_STATE.INSTRUCTIONS:
+        this.renderInstructions();
+        break;
       case GAME_STATE.SERVE:
       case GAME_STATE.PLAYING:
       case GAME_STATE.BALL_LOST:
@@ -409,6 +423,35 @@ export class ArkanoidGame {
     if (blinkOn) {
       ctx.font = '8px "Press Start 2P", monospace';
       ctx.fillText('PUSH SPACE KEY', CANVAS_WIDTH / 2, 160);
+    }
+  }
+
+  renderInstructions() {
+    const { ctx } = this;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+
+    ctx.font = '10px "Press Start 2P", monospace';
+    ctx.fillText('HOW TO PLAY', CANVAS_WIDTH / 2, 26);
+
+    ctx.font = '7px "Press Start 2P", monospace';
+    const lines = [
+      'ARROWS OR A/D - MOVE PADDLE',
+      'SPACE - LAUNCH BALL',
+      '',
+      'BREAK EVERY BRICK TO',
+      'CLEAR THE ROUND',
+      '',
+      'SILVER BRICKS TAKE 2 HITS',
+      'GOLD BRICKS NEVER BREAK',
+    ];
+    lines.forEach((line, i) => {
+      ctx.fillText(line, CANVAS_WIDTH / 2, 52 + i * 13);
+    });
+
+    const blinkOn = Math.floor(this.stateTime / 0.5) % 2 === 0;
+    if (blinkOn) {
+      ctx.fillText('PUSH SPACE KEY', CANVAS_WIDTH / 2, 224);
     }
   }
 }
