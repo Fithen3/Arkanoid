@@ -9,6 +9,8 @@ import {
   BALL,
   MAX_BOUNCE_ANGLE,
   BRICK,
+  STARTING_LIVES,
+  BALL_LOST_PAUSE,
 } from './constants.js';
 import { InputManager } from './input.js';
 import { Paddle } from './entities/paddle.js';
@@ -16,6 +18,7 @@ import { Ball } from './entities/ball.js';
 import { BrickField } from './entities/brick.js';
 import { LEVELS } from './levels.js';
 import { clamp } from './utils.js';
+import { renderHud, renderCenterMessage } from './hud.js';
 
 export class ArkanoidGame {
   constructor(canvasEl) {
@@ -36,6 +39,7 @@ export class ArkanoidGame {
     this.balls = [];
     this.score = 0;
     this.level = 0;
+    this.lives = STARTING_LIVES;
     this.brickField = this.buildBrickField(this.level);
 
     this.state = GAME_STATE.TITLE;
@@ -111,6 +115,12 @@ export class ArkanoidGame {
       case GAME_STATE.PLAYING:
         this.updatePlaying(dt);
         break;
+      case GAME_STATE.BALL_LOST:
+        this.updateBallLost(dt);
+        break;
+      case GAME_STATE.GAME_OVER:
+        this.updateGameOver(dt);
+        break;
       default:
         break;
     }
@@ -146,8 +156,38 @@ export class ArkanoidGame {
     this.balls = this.balls.filter((ball) => ball.y - ball.radius <= PLAYFIELD.bottom);
 
     if (this.balls.length === 0) {
+      this.handleBallLost();
+    }
+  }
+
+  handleBallLost() {
+    this.lives -= 1;
+    if (this.lives <= 0) {
+      this.setState(GAME_STATE.GAME_OVER);
+    } else {
+      this.setState(GAME_STATE.BALL_LOST);
+    }
+  }
+
+  updateBallLost(_dt) {
+    if (this.stateTime >= BALL_LOST_PAUSE) {
       this.setState(GAME_STATE.SERVE);
     }
+  }
+
+  updateGameOver(_dt) {
+    if (this.stateTime > 1.0 && this.input.consumePress('Space')) {
+      this.resetGame();
+      this.setState(GAME_STATE.TITLE);
+    }
+  }
+
+  resetGame() {
+    this.score = 0;
+    this.level = 0;
+    this.lives = STARTING_LIVES;
+    this.brickField = this.buildBrickField(this.level);
+    this.balls = [];
   }
 
   resolveBallWallCollision(ball) {
@@ -228,10 +268,25 @@ export class ArkanoidGame {
         break;
       case GAME_STATE.SERVE:
       case GAME_STATE.PLAYING:
+      case GAME_STATE.BALL_LOST:
         this.renderPlayfield();
         this.renderBricks();
         this.renderPaddle();
         this.renderBalls();
+        renderHud(ctx, {
+          score: this.score,
+          level: this.level,
+          lives: this.lives,
+          canvasWidth: CANVAS_WIDTH,
+          canvasHeight: CANVAS_HEIGHT,
+        });
+        break;
+      case GAME_STATE.GAME_OVER:
+        renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [
+          'GAME OVER',
+          `SCORE ${this.score}`,
+          'PUSH SPACE KEY',
+        ]);
         break;
       default:
         break;
