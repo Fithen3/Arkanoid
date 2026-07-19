@@ -1,6 +1,18 @@
-import { CANVAS_WIDTH, CANVAS_HEIGHT, GAME_STATE, FIXED_DT, MAX_FRAME_DELTA, PLAYFIELD, PADDLE } from './constants.js';
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  GAME_STATE,
+  FIXED_DT,
+  MAX_FRAME_DELTA,
+  PLAYFIELD,
+  PADDLE,
+  BALL,
+  MAX_BOUNCE_ANGLE,
+} from './constants.js';
 import { InputManager } from './input.js';
 import { Paddle } from './entities/paddle.js';
+import { Ball } from './entities/ball.js';
+import { clamp } from './utils.js';
 
 export class ArkanoidGame {
   constructor(canvasEl) {
@@ -18,6 +30,8 @@ export class ArkanoidGame {
       PADDLE.speed
     );
 
+    this.balls = [];
+
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
 
@@ -31,6 +45,22 @@ export class ArkanoidGame {
   setState(state) {
     this.state = state;
     this.stateTime = 0;
+
+    if (state === GAME_STATE.SERVE) {
+      this.spawnServeBall();
+    }
+  }
+
+  spawnServeBall() {
+    const ball = new Ball(0, 0, BALL.radius, BALL.speed);
+    ball.attached = true;
+    this.balls = [ball];
+    this.snapBallToPaddle(ball);
+  }
+
+  snapBallToPaddle(ball) {
+    ball.x = this.paddle.centerX;
+    ball.y = this.paddle.y - ball.radius;
   }
 
   start() {
@@ -65,6 +95,9 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.updateTitle(dt);
         break;
+      case GAME_STATE.SERVE:
+        this.updateServe(dt);
+        break;
       case GAME_STATE.PLAYING:
         this.updatePlaying(dt);
         break;
@@ -75,12 +108,70 @@ export class ArkanoidGame {
 
   updateTitle(_dt) {
     if (this.input.consumePress('Space')) {
+      this.setState(GAME_STATE.SERVE);
+    }
+  }
+
+  updateServe(dt) {
+    this.paddle.update(dt, this.input, PLAYFIELD.left, PLAYFIELD.right);
+    const ball = this.balls[0];
+    this.snapBallToPaddle(ball);
+
+    if (this.input.consumePress('Space')) {
+      ball.launch(BALL.launchAngle * (Math.random() < 0.5 ? -1 : 1));
       this.setState(GAME_STATE.PLAYING);
     }
   }
 
   updatePlaying(dt) {
     this.paddle.update(dt, this.input, PLAYFIELD.left, PLAYFIELD.right);
+
+    for (const ball of this.balls) {
+      ball.update(dt);
+      this.resolveBallWallCollision(ball);
+      this.resolveBallPaddleCollision(ball);
+    }
+
+    this.balls = this.balls.filter((ball) => ball.y - ball.radius <= PLAYFIELD.bottom);
+
+    if (this.balls.length === 0) {
+      this.setState(GAME_STATE.SERVE);
+    }
+  }
+
+  resolveBallWallCollision(ball) {
+    if (ball.x - ball.radius <= PLAYFIELD.left) {
+      ball.x = PLAYFIELD.left + ball.radius;
+      ball.vx = Math.abs(ball.vx);
+    } else if (ball.x + ball.radius >= PLAYFIELD.right) {
+      ball.x = PLAYFIELD.right - ball.radius;
+      ball.vx = -Math.abs(ball.vx);
+    }
+
+    if (ball.y - ball.radius <= PLAYFIELD.top) {
+      ball.y = PLAYFIELD.top + ball.radius;
+      ball.vy = Math.abs(ball.vy);
+    }
+  }
+
+  resolveBallPaddleCollision(ball) {
+    if (ball.vy <= 0) return;
+
+    const rect = this.paddle.getRect();
+    const touchesX = ball.x + ball.radius >= rect.x && ball.x - ball.radius <= rect.x + rect.width;
+    const touchesY = ball.y + ball.radius >= rect.y && ball.y - ball.radius <= rect.y + rect.height;
+    if (!touchesX || !touchesY) return;
+
+    const offset = clamp((ball.x - this.paddle.centerX) / (rect.width / 2), -1, 1);
+    let angle = offset * MAX_BOUNCE_ANGLE;
+    if (Math.abs(Math.cos((angle * Math.PI) / 180)) < 0.2) {
+      angle = Math.sign(angle || 1) * 78;
+    }
+
+    const angleRad = (angle * Math.PI) / 180;
+    ball.vx = ball.speed * Math.sin(angleRad);
+    ball.vy = -ball.speed * Math.cos(angleRad);
+    ball.y = rect.y - ball.radius;
   }
 
   render() {
@@ -92,12 +183,24 @@ export class ArkanoidGame {
       case GAME_STATE.TITLE:
         this.renderTitle();
         break;
+      case GAME_STATE.SERVE:
       case GAME_STATE.PLAYING:
         this.renderPlayfield();
         this.renderPaddle();
+        this.renderBalls();
         break;
       default:
         break;
+    }
+  }
+
+  renderBalls() {
+    const { ctx } = this;
+    ctx.fillStyle = '#e0e0e0';
+    for (const ball of this.balls) {
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

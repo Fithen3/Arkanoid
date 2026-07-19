@@ -34,3 +34,12 @@ export const PADDLE = {
   speed: 200,
   y: PLAYFIELD.bottom - 20,
 };
+
+export const BALL = {
+  radius: 3,
+  speed: 130,
+  launchAngle: 15, // degrees off vertical, on serve
+};
+
+// Max angle (degrees, from vertical) the paddle can redirect the ball.
+export const MAX_BOUNCE_ANGLE = 60;
