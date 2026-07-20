@@ -13,13 +13,25 @@ import {
   BALL_LOST_PAUSE,
   ROUND_INTRO_DURATION,
   ROUND_CLEAR_DURATION,
+  SILVER_BRICK_CODE,
+  POWER_UP_TYPE,
+  POWER_UP_COLORS,
+  POWER_UP_LETTERS,
+  POWER_UP_DROP_CHANCE,
+  POWER_UP_FALL_SPEED,
+  POWER_UP_SIZE,
+  EXPAND_WIDTH_MULTIPLIER,
+  EXPAND_DURATION,
+  SLOW_SPEED_MULTIPLIER,
+  SLOW_DURATION,
 } from './constants.js';
 import { InputManager } from './input.js';
 import { Paddle } from './entities/paddle.js';
 import { Ball } from './entities/ball.js';
 import { BrickField } from './entities/brick.js';
+import { PowerUp } from './entities/powerup.js';
 import { LEVELS } from './levels.js';
-import { clamp } from './utils.js';
+import { clamp, choice } from './utils.js';
 import { renderHud, renderCenterMessage } from './hud.js';
 
 export class ArkanoidGame {
@@ -43,6 +55,9 @@ export class ArkanoidGame {
     this.level = 0;
     this.lives = STARTING_LIVES;
     this.brickField = this.buildBrickField(this.level);
+    this.powerUp = null;
+    this.effectTimers = { expand: 0, slow: 0 };
+    this.ballSpeedMultiplier = 1;
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -187,24 +202,161 @@ export class ArkanoidGame {
 
   updatePlaying(dt) {
     this.paddle.update(dt, this.input, PLAYFIELD.left, PLAYFIELD.right);
+    this.tickEffectTimers(dt);
+
+    const hasAttachedBalls = this.balls.some((ball) => ball.attached);
+    if (hasAttachedBalls && this.input.consumePress('Space')) {
+      this.launchAttachedBalls();
+    }
 
     for (const ball of this.balls) {
+      if (ball.attached) {
+        this.followPaddleSticky(ball);
+        continue;
+      }
       ball.update(dt);
       this.resolveBallWallCollision(ball);
       this.resolveBallPaddleCollision(ball);
       this.resolveBallBrickCollision(ball);
     }
 
+    this.updatePowerUp(dt);
+
     if (this.brickField.allCleared()) {
       this.handleRoundClear();
       return;
     }
 
-    this.balls = this.balls.filter((ball) => ball.y - ball.radius <= PLAYFIELD.bottom);
+    this.balls = this.balls.filter((ball) => ball.attached || ball.y - ball.radius <= PLAYFIELD.bottom);
 
     if (this.balls.length === 0) {
       this.handleBallLost();
     }
+  }
+
+  followPaddleSticky(ball) {
+    ball.x = clamp(
+      this.paddle.centerX + ball.stickyOffsetX,
+      PLAYFIELD.left + ball.radius,
+      PLAYFIELD.right - ball.radius
+    );
+    ball.y = this.paddle.y - ball.radius;
+  }
+
+  launchAttachedBalls() {
+    for (const ball of this.balls) {
+      if (!ball.attached) continue;
+      const offset = clamp(ball.stickyOffsetX / (this.paddle.width / 2), -1, 1);
+      ball.launch(offset * MAX_BOUNCE_ANGLE);
+    }
+  }
+
+  tickEffectTimers(dt) {
+    if (this.effectTimers.expand > 0) {
+      this.effectTimers.expand -= dt;
+      if (this.effectTimers.expand <= 0) {
+        this.effectTimers.expand = 0;
+        this.paddle.width = this.paddle.baseWidth;
+        this.paddle.x = clamp(this.paddle.x, PLAYFIELD.left, PLAYFIELD.right - this.paddle.width);
+      }
+    }
+
+    if (this.effectTimers.slow > 0) {
+      this.effectTimers.slow -= dt;
+      if (this.effectTimers.slow <= 0) {
+        this.effectTimers.slow = 0;
+        this.ballSpeedMultiplier = 1;
+        this.balls.forEach((ball) => {
+          if (!ball.attached) this.rescaleBallSpeed(ball, BALL.speed);
+        });
+      }
+    }
+  }
+
+  rescaleBallSpeed(ball, newSpeed) {
+    const currentSpeed = Math.hypot(ball.vx, ball.vy) || newSpeed;
+    const scale = newSpeed / currentSpeed;
+    ball.vx *= scale;
+    ball.vy *= scale;
+    ball.speed = newSpeed;
+  }
+
+  updatePowerUp(dt) {
+    if (!this.powerUp) return;
+    this.powerUp.update(dt);
+
+    if (this.powerUp.isCaughtBy(this.paddle.getRect())) {
+      this.applyPowerUp(this.powerUp.type);
+      this.powerUp = null;
+      return;
+    }
+    if (this.powerUp.y > PLAYFIELD.bottom) {
+      this.powerUp = null;
+    }
+  }
+
+  maybeSpawnPowerUp(brick) {
+    if (this.powerUp) return;
+    if (brick.typeCode === SILVER_BRICK_CODE) return;
+    if (Math.random() > POWER_UP_DROP_CHANCE) return;
+
+    const type = choice(Object.values(POWER_UP_TYPE));
+    this.powerUp = new PowerUp(
+      brick.x + brick.width / 2 - POWER_UP_SIZE.width / 2,
+      brick.y + brick.height / 2 - POWER_UP_SIZE.height / 2,
+      type,
+      POWER_UP_SIZE.width,
+      POWER_UP_SIZE.height,
+      POWER_UP_FALL_SPEED
+    );
+  }
+
+  applyPowerUp(type) {
+    switch (type) {
+      case POWER_UP_TYPE.EXPAND:
+        this.paddle.width = this.paddle.baseWidth * EXPAND_WIDTH_MULTIPLIER;
+        this.paddle.x = clamp(this.paddle.x, PLAYFIELD.left, PLAYFIELD.right - this.paddle.width);
+        this.effectTimers.expand = EXPAND_DURATION;
+        break;
+      case POWER_UP_TYPE.SLOW:
+        this.ballSpeedMultiplier = SLOW_SPEED_MULTIPLIER;
+        this.balls.forEach((ball) => {
+          if (!ball.attached) this.rescaleBallSpeed(ball, BALL.speed * this.ballSpeedMultiplier);
+        });
+        this.effectTimers.slow = SLOW_DURATION;
+        break;
+      case POWER_UP_TYPE.CATCH:
+        this.paddle.sticky = true;
+        break;
+      case POWER_UP_TYPE.MULTIBALL:
+        this.applyMultiball();
+        break;
+      case POWER_UP_TYPE.EXTRA_LIFE:
+        this.lives += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  applyMultiball() {
+    const newBalls = [];
+    for (const ball of this.balls) {
+      newBalls.push(ball);
+      if (ball.attached) continue;
+      newBalls.push(this.spawnBallClone(ball, 18));
+      newBalls.push(this.spawnBallClone(ball, -18));
+    }
+    this.balls = newBalls;
+  }
+
+  spawnBallClone(ball, angleOffsetDeg) {
+    const clone = ball.clone();
+    const baseAngle = Math.atan2(ball.vx, -ball.vy);
+    const angle = baseAngle + (angleOffsetDeg * Math.PI) / 180;
+    clone.vx = clone.speed * Math.sin(angle);
+    clone.vy = -clone.speed * Math.cos(angle);
+    return clone;
   }
 
   handleRoundClear() {
@@ -217,6 +369,7 @@ export class ArkanoidGame {
   }
 
   handleBallLost() {
+    this.powerUp = null;
     this.lives -= 1;
     if (this.lives <= 0) {
       this.setState(GAME_STATE.GAME_OVER);
@@ -249,6 +402,10 @@ export class ArkanoidGame {
     this.brickField = this.buildBrickField(this.level);
     this.paddle.width = this.paddle.baseWidth;
     this.paddle.x = (PLAYFIELD.left + PLAYFIELD.right) / 2 - this.paddle.width / 2;
+    this.paddle.sticky = false;
+    this.powerUp = null;
+    this.effectTimers = { expand: 0, slow: 0 };
+    this.ballSpeedMultiplier = 1;
     this.setState(GAME_STATE.ROUND_INTRO);
   }
 
@@ -274,6 +431,15 @@ export class ArkanoidGame {
     const touchesX = ball.x + ball.radius >= rect.x && ball.x - ball.radius <= rect.x + rect.width;
     const touchesY = ball.y + ball.radius >= rect.y && ball.y - ball.radius <= rect.y + rect.height;
     if (!touchesX || !touchesY) return;
+
+    if (this.paddle.sticky) {
+      ball.attached = true;
+      ball.stickyOffsetX = clamp(ball.x - this.paddle.centerX, -rect.width / 2, rect.width / 2);
+      ball.vx = 0;
+      ball.vy = 0;
+      ball.y = rect.y - ball.radius;
+      return;
+    }
 
     const offset = clamp((ball.x - this.paddle.centerX) / (rect.width / 2), -1, 1);
     let angle = offset * MAX_BOUNCE_ANGLE;
@@ -314,6 +480,7 @@ export class ArkanoidGame {
       if (result.destroyed) {
         this.score += result.scoreValue;
         this.brickField.registerDestroyed();
+        this.maybeSpawnPowerUp(brick);
       }
       break; // resolve at most one brick per ball per frame
     }
@@ -340,6 +507,7 @@ export class ArkanoidGame {
         this.renderBricks();
         this.renderPaddle();
         this.renderBalls();
+        this.renderPowerUp();
         renderHud(ctx, {
           score: this.score,
           level: this.level,
@@ -393,6 +561,18 @@ export class ArkanoidGame {
     }
   }
 
+  renderPowerUp() {
+    if (!this.powerUp) return;
+    const { ctx } = this;
+    const rect = this.powerUp.getRect();
+    ctx.fillStyle = POWER_UP_COLORS[this.powerUp.type];
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.fillStyle = '#000000';
+    ctx.font = '6px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(POWER_UP_LETTERS[this.powerUp.type], rect.x + rect.width / 2, rect.y + rect.height - 1);
+  }
+
   renderPlayfield() {
     const { ctx } = this;
     ctx.strokeStyle = '#3050c0';
@@ -408,7 +588,7 @@ export class ArkanoidGame {
   renderPaddle() {
     const { ctx } = this;
     const rect = this.paddle.getRect();
-    ctx.fillStyle = '#e0e0e0';
+    ctx.fillStyle = this.paddle.sticky ? '#d070f0' : '#e0e0e0';
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
   }
 

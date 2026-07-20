@@ -6,6 +6,8 @@ export class Paddle {
     this.height = height;
     this.speed = speed;
     this.baseWidth = width;
+    // Set true by a Catch capsule: balls stick on contact instead of bouncing.
+    this.sticky = false;
   }
 
   get centerX() {

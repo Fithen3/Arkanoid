@@ -8,6 +8,8 @@ export class Ball {
     this.vy = 0;
     // Glued to the paddle until launch() is called.
     this.attached = true;
+    // Horizontal offset from paddle center while attached via a Catch capsule.
+    this.stickyOffsetX = 0;
   }
 
   launch(angleDeg) {

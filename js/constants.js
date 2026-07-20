@@ -67,3 +67,39 @@ export const BRICK_TYPES = {
   7: { color: '#c8c8d0', hp: 2, indestructible: false, score: 150 }, // silver
   8: { color: '#e8c040', hp: Infinity, indestructible: true, score: 0 }, // gold
 };
+
+// Silver bricks (7) don't drop capsules, matching classic Arkanoid.
+export const SILVER_BRICK_CODE = 7;
+
+export const POWER_UP_TYPE = Object.freeze({
+  EXPAND: 'EXPAND',
+  SLOW: 'SLOW',
+  CATCH: 'CATCH',
+  MULTIBALL: 'MULTIBALL',
+  EXTRA_LIFE: 'EXTRA_LIFE',
+});
+
+export const POWER_UP_COLORS = {
+  EXPAND: '#60d860',
+  SLOW: '#60c4fc',
+  CATCH: '#d070f0',
+  MULTIBALL: '#fcec50',
+  EXTRA_LIFE: '#fc6060',
+};
+
+export const POWER_UP_LETTERS = {
+  EXPAND: 'E',
+  SLOW: 'S',
+  CATCH: 'C',
+  MULTIBALL: 'M',
+  EXTRA_LIFE: 'P',
+};
+
+export const POWER_UP_DROP_CHANCE = 0.28;
+export const POWER_UP_FALL_SPEED = 55;
+export const POWER_UP_SIZE = { width: 12, height: 6 };
+
+export const EXPAND_WIDTH_MULTIPLIER = 1.6;
+export const EXPAND_DURATION = 12;
+export const SLOW_SPEED_MULTIPLIER = 0.65;
+export const SLOW_DURATION = 10;
