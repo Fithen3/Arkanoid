@@ -217,10 +217,7 @@ export class ArkanoidGame {
         this.followPaddleSticky(ball);
         continue;
       }
-      ball.update(dt);
-      this.resolveBallWallCollision(ball);
-      this.resolveBallPaddleCollision(ball);
-      this.resolveBallBrickCollision(ball);
+      this.stepBall(ball, dt);
     }
 
     this.updatePowerUp(dt);
@@ -412,6 +409,24 @@ export class ArkanoidGame {
     this.setState(GAME_STATE.ROUND_INTRO);
   }
 
+  // Advance a ball in several small sub-steps so a fast ball can't tunnel
+  // through a brick or the paddle between two frames.
+  stepBall(ball, dt) {
+    const speed = Math.hypot(ball.vx, ball.vy) || ball.speed;
+    const maxStep = Math.min(BRICK.width, BRICK.height, ball.radius) * 0.5;
+    const steps = Math.max(1, Math.ceil((speed * dt) / maxStep));
+    const subDt = dt / steps;
+
+    for (let i = 0; i < steps; i += 1) {
+      const prevX = ball.x;
+      const prevY = ball.y;
+      ball.update(subDt);
+      this.resolveBallWallCollision(ball);
+      this.resolveBallPaddleCollision(ball);
+      this.resolveBallBrickCollision(ball, prevX, prevY);
+    }
+  }
+
   resolveBallWallCollision(ball) {
     if (ball.x - ball.radius <= PLAYFIELD.left) {
       ball.x = PLAYFIELD.left + ball.radius;
@@ -456,7 +471,7 @@ export class ArkanoidGame {
     ball.y = rect.y - ball.radius;
   }
 
-  resolveBallBrickCollision(ball) {
+  resolveBallBrickCollision(ball, prevX, prevY) {
     for (const brick of this.brickField.getAliveBricks()) {
       const rect = brick.getRect();
       const closestX = clamp(ball.x, rect.x, rect.x + rect.width);
@@ -465,16 +480,23 @@ export class ArkanoidGame {
       const dy = ball.y - closestY;
       if (dx * dx + dy * dy > ball.radius * ball.radius) continue;
 
-      if (closestX === ball.x) {
-        // Hit the top or bottom face.
+      // Decide which face was hit from where the ball came from, not from
+      // penetration depth - depth comparison is fragile right at corners
+      // and where two bricks sit side by side.
+      const cameFromAbove = prevY + ball.radius <= rect.y;
+      const cameFromBelow = prevY - ball.radius >= rect.y + rect.height;
+      const cameFromLeft = prevX + ball.radius <= rect.x;
+      const cameFromRight = prevX - ball.radius >= rect.x + rect.width;
+
+      if (cameFromAbove || cameFromBelow) {
         ball.vy = -ball.vy;
-        ball.y = ball.y < rect.y + rect.height / 2 ? rect.y - ball.radius : rect.y + rect.height + ball.radius;
-      } else if (closestY === ball.y) {
-        // Hit the left or right face.
+        ball.y = cameFromAbove ? rect.y - ball.radius : rect.y + rect.height + ball.radius;
+      } else if (cameFromLeft || cameFromRight) {
         ball.vx = -ball.vx;
-        ball.x = ball.x < rect.x + rect.width / 2 ? rect.x - ball.radius : rect.x + rect.width + ball.radius;
+        ball.x = cameFromLeft ? rect.x - ball.radius : rect.x + rect.width + ball.radius;
       } else {
-        // Corner hit.
+        // Was already overlapping both axes at the start of this sub-step
+        // (corner case) - reflect both as a reasonable fallback.
         ball.vx = -ball.vx;
         ball.vy = -ball.vy;
       }
