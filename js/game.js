@@ -34,6 +34,7 @@ import { LEVELS } from './levels.js';
 import { clamp, choice } from './utils.js';
 import { renderHud, renderCenterMessage } from './hud.js';
 import { ParticleSystem } from './particles.js';
+import { SoundManager } from './audio.js';
 
 export class ArkanoidGame {
   constructor(canvasEl) {
@@ -62,6 +63,7 @@ export class ArkanoidGame {
     this.particles = new ParticleSystem();
     this.scorePopups = [];
     this.flashTime = 0;
+    this.sound = new SoundManager();
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -195,6 +197,7 @@ export class ArkanoidGame {
 
   updateTitle(_dt) {
     if (this.input.consumePress('Space')) {
+      this.sound.ensureContext();
       this.setState(GAME_STATE.INSTRUCTIONS);
     }
   }
@@ -499,6 +502,8 @@ export class ArkanoidGame {
     const touchesY = ball.y + ball.radius >= rect.y && ball.y - ball.radius <= rect.y + rect.height;
     if (!touchesX || !touchesY) return;
 
+    this.sound.playPaddleHit();
+
     if (this.paddle.sticky) {
       ball.attached = true;
       ball.stickyOffsetX = clamp(ball.x - this.paddle.centerX, -rect.width / 2, rect.width / 2);
@@ -551,6 +556,7 @@ export class ArkanoidGame {
       }
 
       const result = brick.hit();
+      this.sound.playBrickHit();
       const burstX = brick.x + brick.width / 2;
       const burstY = brick.y + brick.height / 2;
       if (result.destroyed) {
