@@ -10,6 +10,7 @@ export class Brick {
     this.typeCode = typeCode;
     this.color = def.color;
     this.hp = def.hp;
+    this.maxHp = def.hp;
     this.indestructible = def.indestructible;
     this.scoreValue = def.score;
     this.alive = true;

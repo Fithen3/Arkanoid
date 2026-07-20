@@ -643,7 +643,37 @@ export class ArkanoidGame {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.lineWidth = 1;
       ctx.strokeRect(brick.x + 0.5, brick.y + 0.5, brick.width - 1, brick.height - 1);
+
+      if (Number.isFinite(brick.maxHp) && brick.maxHp > 1 && brick.hp < brick.maxHp) {
+        this.renderBrickDamage(brick);
+      }
     }
+  }
+
+  // Multi-hit bricks (e.g. silver) show cracks once their hp drops below
+  // max, so the player can see how close they are to breaking through.
+  renderBrickDamage(brick) {
+    const { ctx } = this;
+    const { x, y, width: w, height: h } = brick;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.2, y);
+    ctx.lineTo(x + w * 0.5, y + h * 0.45);
+    ctx.lineTo(x + w * 0.35, y + h);
+    ctx.moveTo(x + w * 0.5, y + h * 0.45);
+    ctx.lineTo(x + w * 0.85, y + h * 0.7);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.2 + 1, y);
+    ctx.lineTo(x + w * 0.5 + 1, y + h * 0.45);
+    ctx.stroke();
   }
 
   renderBalls() {
