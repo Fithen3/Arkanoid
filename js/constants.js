@@ -39,6 +39,7 @@ export const BALL = {
   radius: 3,
   speed: 130,
   launchAngle: 15, // degrees off vertical, on serve
+  trailLength: 8,
 };
 
 export const STARTING_LIVES = 3;

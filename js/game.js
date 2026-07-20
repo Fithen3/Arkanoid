@@ -88,7 +88,7 @@ export class ArkanoidGame {
   }
 
   spawnServeBall() {
-    const ball = new Ball(0, 0, BALL.radius, BALL.speed);
+    const ball = new Ball(0, 0, BALL.radius, BALL.speed, BALL.trailLength);
     ball.attached = true;
     this.balls = [ball];
     this.snapBallToPaddle(ball);
@@ -510,6 +510,7 @@ export class ArkanoidGame {
       ball.vx = 0;
       ball.vy = 0;
       ball.y = rect.y - ball.radius;
+      ball.clearTrail();
       return;
     }
 
@@ -647,10 +648,21 @@ export class ArkanoidGame {
 
   renderBalls() {
     const { ctx } = this;
-    ctx.fillStyle = '#e0e0e0';
     for (const ball of this.balls) {
+      for (let i = 0; i < ball.trail.length; i += 1) {
+        const point = ball.trail[i];
+        const t = (i + 1) / (ball.trail.length + 1); // older points are smaller/dimmer
+        ctx.globalAlpha = t * 0.35;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, Math.max(ball.radius * t, 1), 0, Math.PI * 2);
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#e0e0e0';
       ctx.fill();
     }
   }

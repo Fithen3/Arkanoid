@@ -1,5 +1,5 @@
 export class Ball {
-  constructor(x, y, radius, speed) {
+  constructor(x, y, radius, speed, trailLength) {
     this.x = x;
     this.y = y;
     this.radius = radius;
@@ -10,6 +10,9 @@ export class Ball {
     this.attached = true;
     // Horizontal offset from paddle center while attached via a Catch capsule.
     this.stickyOffsetX = 0;
+    // Recent positions, most recent last, used to draw a fading motion trail.
+    this.trailLength = trailLength;
+    this.trail = [];
   }
 
   launch(angleDeg) {
@@ -23,10 +26,17 @@ export class Ball {
     if (this.attached) return;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
+
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > this.trailLength) this.trail.shift();
+  }
+
+  clearTrail() {
+    this.trail = [];
   }
 
   clone() {
-    const copy = new Ball(this.x, this.y, this.radius, this.speed);
+    const copy = new Ball(this.x, this.y, this.radius, this.speed, this.trailLength);
     copy.vx = this.vx;
     copy.vy = this.vy;
     copy.attached = false;
