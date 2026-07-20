@@ -33,6 +33,7 @@ import { PowerUp } from './entities/powerup.js';
 import { LEVELS } from './levels.js';
 import { clamp, choice } from './utils.js';
 import { renderHud, renderCenterMessage } from './hud.js';
+import { ParticleSystem } from './particles.js';
 
 export class ArkanoidGame {
   constructor(canvasEl) {
@@ -58,6 +59,7 @@ export class ArkanoidGame {
     this.powerUp = null;
     this.effectTimers = { expand: 0, slow: 0 };
     this.ballSpeedMultiplier = 1;
+    this.particles = new ParticleSystem();
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -121,6 +123,7 @@ export class ArkanoidGame {
 
   update(dt) {
     this.stateTime += dt;
+    this.particles.update(dt);
 
     switch (this.state) {
       case GAME_STATE.TITLE:
@@ -477,10 +480,15 @@ export class ArkanoidGame {
       }
 
       const result = brick.hit();
+      const burstX = brick.x + brick.width / 2;
+      const burstY = brick.y + brick.height / 2;
       if (result.destroyed) {
         this.score += result.scoreValue;
         this.brickField.registerDestroyed();
         this.maybeSpawnPowerUp(brick);
+        this.particles.spawnBurst(burstX, burstY, brick.color, 14);
+      } else {
+        this.particles.spawnBurst(burstX, burstY, brick.color, 5);
       }
       break; // resolve at most one brick per ball per frame
     }
@@ -508,6 +516,7 @@ export class ArkanoidGame {
         this.renderPaddle();
         this.renderBalls();
         this.renderPowerUp();
+        this.particles.render(ctx);
         renderHud(ctx, {
           score: this.score,
           level: this.level,
