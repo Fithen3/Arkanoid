@@ -60,6 +60,8 @@ export class ArkanoidGame {
     this.effectTimers = { expand: 0, slow: 0 };
     this.ballSpeedMultiplier = 1;
     this.particles = new ParticleSystem();
+    this.scorePopups = [];
+    this.flashTime = 0;
 
     this.state = GAME_STATE.TITLE;
     this.stateTime = 0;
@@ -124,6 +126,8 @@ export class ArkanoidGame {
   update(dt) {
     this.stateTime += dt;
     this.particles.update(dt);
+    this.updateScorePopups(dt);
+    if (this.flashTime > 0) this.flashTime -= dt;
 
     switch (this.state) {
       case GAME_STATE.TITLE:
@@ -361,6 +365,7 @@ export class ArkanoidGame {
 
   handleRoundClear() {
     this.balls = [];
+    this.flashTime = 0.2;
     if (this.level + 1 >= LEVELS.length) {
       this.setState(GAME_STATE.VICTORY);
     } else {
@@ -370,6 +375,7 @@ export class ArkanoidGame {
 
   handleBallLost() {
     this.powerUp = null;
+    this.flashTime = 0.15;
     this.lives -= 1;
     if (this.lives <= 0) {
       this.setState(GAME_STATE.GAME_OVER);
@@ -425,6 +431,18 @@ export class ArkanoidGame {
       this.resolveBallPaddleCollision(ball);
       this.resolveBallBrickCollision(ball, prevX, prevY);
     }
+  }
+
+  spawnScorePopup(x, y, points) {
+    this.scorePopups.push({ x, y, text: `${points}`, life: 0, maxLife: 0.6 });
+  }
+
+  updateScorePopups(dt) {
+    for (const popup of this.scorePopups) {
+      popup.life += dt;
+      popup.y -= 18 * dt;
+    }
+    this.scorePopups = this.scorePopups.filter((popup) => popup.life < popup.maxLife);
   }
 
   resolveBallWallCollision(ball) {
@@ -509,6 +527,7 @@ export class ArkanoidGame {
         this.brickField.registerDestroyed();
         this.maybeSpawnPowerUp(brick);
         this.particles.spawnBurst(burstX, burstY, brick.color, 14);
+        this.spawnScorePopup(burstX, burstY, result.scoreValue);
       } else {
         this.particles.spawnBurst(burstX, burstY, brick.color, 5);
       }
@@ -539,6 +558,7 @@ export class ArkanoidGame {
         this.renderBalls();
         this.renderPowerUp();
         this.particles.render(ctx);
+        this.renderScorePopups();
         renderHud(ctx, {
           score: this.score,
           level: this.level,
@@ -551,6 +571,7 @@ export class ArkanoidGame {
         } else if (this.state === GAME_STATE.ROUND_CLEAR) {
           renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, ['ROUND CLEAR']);
         }
+        this.renderFlash();
         break;
       case GAME_STATE.GAME_OVER:
         renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [
@@ -576,6 +597,8 @@ export class ArkanoidGame {
     for (const brick of this.brickField.getAliveBricks()) {
       ctx.fillStyle = brick.color;
       ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillRect(brick.x, brick.y, brick.width, 1);
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.lineWidth = 1;
       ctx.strokeRect(brick.x + 0.5, brick.y + 0.5, brick.width - 1, brick.height - 1);
@@ -606,6 +629,7 @@ export class ArkanoidGame {
 
   renderPlayfield() {
     const { ctx } = this;
+    this.renderBorderChrome();
     ctx.strokeStyle = '#3050c0';
     ctx.lineWidth = 2;
     ctx.strokeRect(
@@ -616,11 +640,58 @@ export class ArkanoidGame {
     );
   }
 
+  // Tiled navy/blue "brick" texture in the margins around the playfield,
+  // instead of a flat CSS border - closer to the NES cabinet frame look.
+  renderBorderChrome() {
+    const { ctx } = this;
+    const tile = 4;
+    const colorA = '#1c2a6e';
+    const colorB = '#2f46b0';
+
+    const drawTiled = (x, y, w, h) => {
+      for (let ty = y; ty < y + h; ty += tile) {
+        for (let tx = x; tx < x + w; tx += tile) {
+          const isAlt = (((tx - x) / tile + (ty - y) / tile) % 2 + 2) % 2 === 0;
+          ctx.fillStyle = isAlt ? colorA : colorB;
+          ctx.fillRect(tx, ty, tile, tile);
+        }
+      }
+    };
+
+    drawTiled(0, PLAYFIELD.top - tile, CANVAS_WIDTH, tile);
+    drawTiled(0, PLAYFIELD.top, PLAYFIELD.left, PLAYFIELD.bottom - PLAYFIELD.top);
+    drawTiled(PLAYFIELD.right, PLAYFIELD.top, CANVAS_WIDTH - PLAYFIELD.right, PLAYFIELD.bottom - PLAYFIELD.top);
+    drawTiled(0, PLAYFIELD.bottom, CANVAS_WIDTH, tile);
+  }
+
   renderPaddle() {
     const { ctx } = this;
     const rect = this.paddle.getRect();
     ctx.fillStyle = this.paddle.sticky ? '#d070f0' : '#e0e0e0';
     ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillRect(rect.x, rect.y, rect.width, 1);
+  }
+
+  renderScorePopups() {
+    const { ctx } = this;
+    ctx.textAlign = 'center';
+    ctx.font = '6px "Press Start 2P", monospace';
+    for (const popup of this.scorePopups) {
+      ctx.globalAlpha = Math.max(1 - popup.life / popup.maxLife, 0);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(popup.text, popup.x, popup.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  renderFlash() {
+    if (this.flashTime <= 0) return;
+    const { ctx } = this;
+    ctx.globalAlpha = (this.flashTime / 0.2) * 0.35;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.globalAlpha = 1;
   }
 
   renderTitle() {
