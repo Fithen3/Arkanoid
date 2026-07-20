@@ -71,6 +71,9 @@ export class ArkanoidGame {
     this._rafId = null;
 
     this.loop = this.loop.bind(this);
+
+    this._prePauseState = null;
+    window.addEventListener('blur', () => this.pause());
   }
 
   setState(state) {
@@ -123,7 +126,35 @@ export class ArkanoidGame {
     this._rafId = requestAnimationFrame(this.loop);
   }
 
+  pause() {
+    if (this.state !== GAME_STATE.SERVE && this.state !== GAME_STATE.PLAYING) return;
+    this._prePauseState = this.state;
+    this.state = GAME_STATE.PAUSED;
+  }
+
+  resume() {
+    if (this.state !== GAME_STATE.PAUSED) return;
+    this.state = this._prePauseState;
+    this._prePauseState = null;
+  }
+
+  togglePause() {
+    if (this.state === GAME_STATE.PAUSED) this.resume();
+    else this.pause();
+  }
+
   update(dt) {
+    if (this.input.consumePress('KeyP')) this.togglePause();
+
+    if (this.state === GAME_STATE.PAUSED) {
+      if (this.input.consumePress('Escape')) {
+        this.resetGame();
+        this.state = GAME_STATE.TITLE;
+        this.stateTime = 0;
+      }
+      return;
+    }
+
     this.stateTime += dt;
     this.particles.update(dt);
     this.updateScorePopups(dt);
@@ -552,6 +583,7 @@ export class ArkanoidGame {
       case GAME_STATE.BALL_LOST:
       case GAME_STATE.ROUND_INTRO:
       case GAME_STATE.ROUND_CLEAR:
+      case GAME_STATE.PAUSED:
         this.renderPlayfield();
         this.renderBricks();
         this.renderPaddle();
@@ -570,6 +602,8 @@ export class ArkanoidGame {
           renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, [`ROUND ${this.level + 1}`]);
         } else if (this.state === GAME_STATE.ROUND_CLEAR) {
           renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, ['ROUND CLEAR']);
+        } else if (this.state === GAME_STATE.PAUSED) {
+          renderCenterMessage(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, ['PAUSED', 'P - RESUME', 'ESC - QUIT TO TITLE']);
         }
         this.renderFlash();
         break;
